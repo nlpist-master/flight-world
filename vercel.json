@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/",
-      "destination": "/versions/v001.html"
+      "destination": "/versions/v002.html"
     }
   ]
 }
