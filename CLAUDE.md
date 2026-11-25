@@ -48,6 +48,8 @@ Coordinates: Web-Mercator meters relative to a start origin (`setOrigin`), scale
 - The terrain heights already include the ×1.35 exaggeration; anything comparing to real elevations must account for it (e.g. trees use `g/1.35`; peak `ele` labels do not).
 - Many things are throttled by `frame % N` – behaviour depends on frame rate.
 - Everything lives in global scope in one `<script>`; names are terse and reused (`V`, `F`, `q`, `R`…). Search carefully before renaming.
+- Network reality (measured 2026-11-25): an uncached AWS Terrarium request takes 1.5–4 s (no CDN); EOX ~0.7–1 s; OpenFreeMap ~0.3 s. Every request before takeoff is expensive – v010 requests only the 8-tile chain under the plane at top priority (`get(z,x,y,1)`), then a distance/heading priority queue (`tprio`).
+- Measured frame cost in Manhattan (v009): terrain detail shader was the biggest GPU cost and scales with pixel count; trees were drawn even off-screen; labels() scanned ~8000 labels per frame (×9 duplicates from vector-tile buffers – fixed in v010 by keeping only in-tile points). Building *construction* (bldTile, 50–130 ms per tile on the main thread) causes the stutters – real fix = Web Worker (planned Stage B).
 - Both tile providers have permanent "holes": AWS Terrarium and EOX sometimes return a 1×1 placeholder image. v009 handles this with `demFor()` / `imgFor()` (fall back to an ancestor tile). Any new tile source needs the same guard.
 
 ## Verification (required after EVERY fix – user's explicit request)
