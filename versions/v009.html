@@ -161,7 +161,9 @@ function updateTiles(){frame++;const set=new Set(),T4=TS(4),cx=Math.floor((pos.x
 // flight
 const pos=new THREE.Vector3(),q=new THREE.Quaternion(),camQ=new THREE.Quaternion(),V=new THREE.Vector3(),F=new THREE.Vector3(),Rt=new THREE.Vector3(),Y=new THREE.Vector3(0,1,0),X=new THREE.Vector3(1,0,0),Z=new THREE.Vector3(0,0,1),dq=new THREE.Quaternion(),tilt=new THREE.Quaternion().setFromAxisAngle(X,-.1);
 let speed=90,thr=.4,fpv=false,inv=1,turbo=false,sx=0,sy=0,drag=null,paused=false,altH=null;
-const keys={};addEventListener('keydown',e=>{if(e.target instanceof Element&&e.target.closest('input,textarea,select,button,[contenteditable="true"]'))return;
+// לחיצת עכבר על כפתור משאירה עליו פוקוס – משחררים אותו כדי שהמקלדת (חיצים/רווח) תמשיך לשלוט במטוס ולא "תלחץ" שוב על הכפתור
+addEventListener('click',e=>{const b=e.target instanceof Element&&e.target.closest('button');if(b&&e.detail)b.blur()});
+const keys={};addEventListener('keydown',e=>{if(e.target instanceof Element&&e.target.closest('input,textarea,select,[contenteditable="true"]'))return;
  keys[e.code]=1;if(e.code=='KeyC')fpv=!fpv;if(e.code=='KeyI')inv*=-1;if(e.code.startsWith('Arrow')||e.code=='Space')e.preventDefault()});
 addEventListener('keyup',e=>keys[e.code]=0);
 cv.addEventListener('pointerdown',e=>{if(drag)return;drag={x:e.clientX,y:e.clientY,id:e.pointerId};cv.setPointerCapture(e.pointerId);joy.style.cssText='display:block;left:'+e.clientX+'px;top:'+e.clientY+'px';joy.firstChild.style.transform=''});
