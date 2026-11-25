@@ -106,16 +106,24 @@ function get(z,x,y){const k=z+'/'+x+'/'+y;let e=tiles.get(k);if(!e){e={z,x,y,las
 function pump(){while(active<8&&queue.length){const e=queue.pop();if(e.dead)continue;active++;load(e).finally(()=>{active--;pump()})}}
 async function load(e){
  const f=s=>s.replace('{z}',e.z).replace('{x}',e.x).replace('{y}',e.y);
- try{build(e,await loadImg(f(DEM_URL)))}catch(err){stat.de++;return}
+ try{const d=await demFor(e.z,e.x,e.y);if(!d){stat.de++;return}if(e.dead)return;build(e,d)}catch(err){stat.de++;return}
  try{const im=await loadImg(f(IMG_URL)),t=new THREE.Texture(im);t.anisotropy=4;t.needsUpdate=true;if(e.dead){t.dispose();return}const m=e.mesh.material;m.map=t;m.vertexColors=false;m.needsUpdate=true;stat.ok++;if(e.z==13)fmask(e,im)}catch(err){stat.ie++}
 }
+// DEM: מפענח אריח Terrarium לגבהים גולמיים (מטר). ב-AWS יש אריחים "ריקים" (PNG של 1x1, למשל סביב הכנרת ובים) –
+// עבורם מחזירים null ולוקחים את הגובה מאריח-אב תקין (אחרת נוצרים ריבועים שטוחים בגובה 0 ו"חוט" של 32 ק"מ בפינה).
+const demCache=new Map();
+async function demRaw(z,x,y,cache){const k=z+'/'+x+'/'+y;if(demCache.has(k))return demCache.get(k);
+ const im=await loadImg(DEM_URL.replace('{z}',z).replace('{x}',x).replace('{y}',y));let H=null;
+ if(im.naturalWidth==256&&im.naturalHeight==256){const c=document.createElement('canvas');c.width=c.height=256;const cx=c.getContext('2d',{willReadFrequently:true});cx.drawImage(im,0,0);const d=cx.getImageData(0,0,256,256).data;
+  H=new Float32Array(65536);for(let i=0;i<65536;i++){const r=d[i*4]*256+d[i*4+1]+d[i*4+2]/256-32768;H[i]=r>9000?9000:r}}
+ if(cache){demCache.set(k,H);if(demCache.size>24)demCache.delete(demCache.keys().next().value)}return H}
+async function demFor(z,x,y){for(let k=0;k<=z;k++){const H=await demRaw(z-k,x>>k,y>>k,k>0);if(H)return{H,k,ox:x-((x>>k)<<k),oy:y-((y>>k)<<k)}}return null}
 function build(e,dem){
- const c=document.createElement('canvas');c.width=c.height=256;const cx=c.getContext('2d',{willReadFrequently:true});cx.drawImage(dem,0,0);const d=cx.getImageData(0,0,256,256).data;
  const N=e.z>=12?128:64,n=N+1,T=TS(e.z),x0=(-HW+e.x*T-OX)*K,z0=-((HW-e.y*T)-OY)*K,s=T*K/N,hg=new Float32Array(n*n);
  const verticalExaggeration = 1.35; // מקדם הגזמה אנכית להרים
- const g=(a,b)=>{const k=(b*256+a)*4;let rawH=d[k]*256+d[k+1]+d[k+2]/256-32768;return rawH * verticalExaggeration;};
- for(let j=0;j<n;j++)for(let i=0;i<n;i++){const u=i/N*255,v=j/N*255,iu=Math.min(254,u|0),iv=Math.min(254,v|0),fu=u-iu,fv=v-iv;
-  let h=g(iu,iv)*(1-fu)*(1-fv)+g(iu+1,iv)*fu*(1-fv)+g(iu,iv+1)*(1-fu)*fv+g(iu+1,iv+1)*fu*fv;if(h<-450)h=0;hg[j*n+i]=h}
+ const D=dem.H,sc=1/2**dem.k,g=(a,b)=>D[b*256+a];
+ for(let j=0;j<n;j++)for(let i=0;i<n;i++){const u=(dem.ox*256+i/N*255)*sc,v=(dem.oy*256+j/N*255)*sc,iu=Math.min(254,u|0),iv=Math.min(254,v|0),fu=Math.min(1,u-iu),fv=Math.min(1,v-iv);
+  let h=g(iu,iv)*(1-fu)*(1-fv)+g(iu+1,iv)*fu*(1-fv)+g(iu,iv+1)*(1-fu)*fv+g(iu+1,iv+1)*fu*fv;if(h<-450)h=0;hg[j*n+i]=h*verticalExaggeration}
  const per=[];for(let i=0;i<N;i++)per.push(i);for(let j=0;j<N;j++)per.push(j*n+N);for(let i=N;i>0;i--)per.push(N*n+i);for(let j=N;j>0;j--)per.push(j*n);
  const V=n*n+per.length,P=new Float32Array(V*3),Nm=new Float32Array(V*3),C=new Float32Array(V*3),UV=new Float32Array(V*2),col=new THREE.Color();
  for(let j=0;j<n;j++)for(let i=0;i<n;i++){const q=j*n+i,h=hg[q],i0=Math.max(0,i-1),i1=Math.min(N,i+1),j0=Math.max(0,j-1),j1=Math.min(N,j+1);
