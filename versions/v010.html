@@ -110,7 +110,9 @@ function pump(){if(active>=12||!queue.length)return;for(const e of queue)e.pr=tp
  while(active<12&&queue.length){const e=queue.pop();if(e.dead)continue;active++;load(e).finally(()=>{active--;pump()})}}
 async function load(e){
  const ip=imgFor(e.z,e.x,e.y).catch(()=>null);
- try{const d=await demFor(e.z,e.x,e.y);if(!d){stat.de++;return}if(e.dead)return;build(e,d)}catch(err){stat.de++;return}
+ // v010: כשל רשת בגובה כבר לא "תוקע" את האריח לתמיד (אריח אחד חסר עצר את כל ה-LOD באזור) – מנסים שוב עם השהיה גדלה
+ const rt=()=>{stat.de++;e.fail=(e.fail||0)+1;setTimeout(()=>{if(!e.dead&&!e.loaded){queue.push(e);pump()}},Math.min(30000,1500*2**e.fail))};
+ try{const d=await demFor(e.z,e.x,e.y);if(!d){rt();return}if(e.dead)return;build(e,d)}catch(err){rt();return}
  try{const im=await ip;if(!im)throw 'img';const t=new THREE.Texture(im);t.anisotropy=4;t.needsUpdate=true;if(e.dead){t.dispose();return}const m=e.mesh.material;m.map=t;m.vertexColors=false;m.needsUpdate=true;stat.ok++;if(e.z==13)fmask(e,im)}catch(err){stat.ie++}
 }
 // DEM: מפענח אריח Terrarium לגבהים גולמיים (מטר). ב-AWS יש אריחים "ריקים" (PNG של 1x1, למשל סביב הכנרת ובים) –
@@ -295,11 +297,13 @@ function labels(){
   LC.sort((a,b)=>a[0]-b[0]);if(LC.length>150)LC.length=150;for(const a of LC)a[1].gy=ground(a[1].x,a[1].z,0)}
  let u=0,roads=0;
  for(const a of LC){if(u>=18)break;const l=a[1];if(l.k=='road'&&(roads>=12||AGL>=2200))continue;const g=l.gy,sc=Math.hypot(l.x-pos.x,l.z-pos.z)/RNG[l.k];if(g==null||sc>=1)continue;
-  pv.set(l.x,(isNaN(l.e)?g:Math.max(l.e,g))+(l.k=='peak'?60:l.k=='road'?30:140),l.z);
+  // v010: שמות רחובות יושבים על הכביש (2.5 מ׳ במקום 30); תווית שהעוגן שלה מוסתר ע"י הקרקע לא מוצגת
+  const ay=(isNaN(l.e)?g:Math.max(l.e,g))+(l.k=='peak'?60:l.k=='road'?RDH:140);pv.set(l.x,ay,l.z);
   if((pv.x-cp.x)*fwd.x+(pv.y-cp.y)*fwd.y+(pv.z-cp.z)*fwd.z<=0)continue;
+  if(frame-(l.of??-99)>=5){l.of=frame;l.oc=occ(l.x,ay,l.z)}if(l.oc)continue;
   pv.project(camera);if(!Number.isFinite(pv.x+pv.y+pv.z)||pv.z < -1||pv.z > 1||Math.abs(pv.x)>1.05||Math.abs(pv.y)>1.05)continue;
   const sx=(pv.x+1)/2*innerWidth,sy=(1-pv.y)/2*innerHeight;let angle=0;
-  if(l.k=='road'){pv.set(l.x1,g+30,l.z1).project(camera);const sx1=(pv.x+1)/2*innerWidth,sy1=(1-pv.y)/2*innerHeight,d1=pv.z;pv.set(l.x2,g+30,l.z2).project(camera);const sx2=(pv.x+1)/2*innerWidth,sy2=(1-pv.y)/2*innerHeight,d2=pv.z;
+  if(l.k=='road'){pv.set(l.x1,g+RDH,l.z1).project(camera);const sx1=(pv.x+1)/2*innerWidth,sy1=(1-pv.y)/2*innerHeight,d1=pv.z;pv.set(l.x2,g+RDH,l.z2).project(camera);const sx2=(pv.x+1)/2*innerWidth,sy2=(1-pv.y)/2*innerHeight,d2=pv.z;
    if(d1>=-1&&d1<=1&&d2>=-1&&d2<=1&&Number.isFinite(sx1+sy1+sx2+sy2)&&Math.hypot(sx2-sx1,sy2-sy1)>1){angle=Math.atan2(sy2-sy1,sx2-sx1);if(angle>Math.PI/2)angle-=Math.PI;else if(angle< -Math.PI/2)angle+=Math.PI}}
   if(placed.some(p=>Math.abs(p[0]-sx)<90&&Math.abs(p[1]-sy)<18))continue;placed.push([sx,sy]);
   const el=lpool[u]||(lpool[u]=$('lb').appendChild(document.createElement('div'))),tx=(l.k=='peak'?'▲ ':'')+l.n;
@@ -307,7 +311,10 @@ function labels(){
   const op=((1-sc*.7)*(l.k=='road'?1-Math.max(0,(AGL-1400)/800):1)).toFixed(2);if(el._o!==op){el._o=op;el.style.opacity=op}
   el.style.transform='translate('+sx.toFixed(1)+'px,'+sy.toFixed(1)+'px) translate(-50%,-50%) rotate('+angle.toFixed(3)+'rad)';if(el._d!==1){el._d=1;el.style.display='block'}u++;if(l.k=='road')roads++}
  for(let i=u;i<lpool.length;i++)if(lpool[i]._d!==0){lpool[i]._d=0;lpool[i].style.display='none'}}
-let LC=null;
+let LC=null;const RDH=2.5;
+// v010: האם הקרקע חוסמת את הקו מהמצלמה לנקודה? דגימה של ground() לאורך הקו (מדלגים על 20 מ׳ הראשונים ליד העוגן)
+function occ(x,y,z){const c=camera.position,dx=c.x-x,dy=c.y-y,dz=c.z-z,L=Math.hypot(dx,dz);if(L<30)return false;const n=Math.min(32,8+(L/300|0)),t0=20/L;
+ for(let i=0;i<n;i++){const t=t0+(1-t0)*i/n,g=ground(x+dx*t,z+dz*t,0);if(g!=null&&g>y+dy*t+1.5)return true}return false}
 // OSM-BEGIN  מבנים וכבישים מ-OpenStreetMap דרך אריחי וקטור (כל העולם)
 const oMat=new THREE.MeshPhongMaterial({vertexColors:true,specular:0x111111,shininess:5,side:THREE.DoubleSide});
 // v010: בניינים "מתמוססים" פנימה במקום לקפוץ – (1) לפי זמן הבנייה של האריח (aT), (2) לפי מרחק בקצה הטווח (uR). dithering = בלי שקיפות ובלי בעיות מיון
@@ -458,7 +465,7 @@ function frameLoop(now){requestAnimationFrame(frameLoop);const dt=Math.min(.05,(
  if(!paused&&mode!='menu')updateTiles();
  if(mode=='loading'){const g=ground(pos.x,pos.z,11);$('st').textContent='טוען נוף… '+tiles.size+' אריחים';if(g!=null){pos.y=g+500;AGL=500;mode='fly';$('ov').style.display='none'}}
  else if(mode=='fly'&&!paused){pauseBtn.hidden=false;fly(dt);compass();gauge();if(frame%6==0)audioTick();carsTick(dt);wT.value=now/1000;bU.uNow.value=now/1000;if(frame%15==0){$('spd').textContent=Math.round(speed*3.6);$('alt').textContent=Math.round(AGL);const l=toLL(pos.x,pos.z);$('pos').textContent=l[0].toFixed(3)+', '+l[1].toFixed(3);
-  $('stt').textContent=stat.ok+' תמונות'+(stat.ie?' · ⚠'+stat.ie+' נכשלו':'')+(stat.de>2?' · ⚠ שגיאת טעינה (הרץ דרך שרת מקומי)':'')+osmTxt()}}
+  $('stt').textContent=stat.ok+' תמונות'+(stat.ie?' · ⚠'+stat.ie+' נכשלו':'')+(stat.de>2&&!stat.ok?' · ⚠ שגיאת טעינה (הרץ דרך שרת מקומי)':'')+osmTxt()}}
  render(paused?0:dt);if(mode=='fly'&&!paused){labels();osmTick()}}
 function resize(){R.setSize(innerWidth,innerHeight,false);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix()}addEventListener('resize',resize);resize();
 function start(la,lo){setPaused(false);altH=null;pauseBtn.hidden=true;setOrigin(la,lo);pos.set(0,1500,0);q.identity();camQ.copy(q);camera.position.copy(pos);mode='loading';$('st').textContent='טוען נוף…';$('q').disabled=true;
