@@ -113,7 +113,7 @@ async function load(e){
  // v010: כשל רשת בגובה כבר לא "תוקע" את האריח לתמיד (אריח אחד חסר עצר את כל ה-LOD באזור) – מנסים שוב עם השהיה גדלה
  const rt=()=>{stat.de++;e.fail=(e.fail||0)+1;setTimeout(()=>{if(!e.dead&&!e.loaded){queue.push(e);pump()}},Math.min(30000,1500*2**e.fail))};
  try{const d=await demFor(e.z,e.x,e.y);if(!d){rt();return}if(e.dead)return;build(e,d)}catch(err){rt();return}
- try{const im=await ip;if(!im)throw 'img';const t=new THREE.Texture(im);t.anisotropy=4;t.needsUpdate=true;if(e.dead){t.dispose();return}const m=e.mesh.material;m.map=t;m.vertexColors=false;m.needsUpdate=true;stat.ok++;if(e.z==13)fmask(e,im)}catch(err){stat.ie++}
+ try{const im=await ip;if(!im)throw 'img';const t=new THREE.Texture(im);t.anisotropy=4;t.needsUpdate=true;if(e.dead){t.dispose();return}const m=e.mesh.material;m.map=t;m.vertexColors=false;m.needsUpdate=true;e.img=1;stat.ok++;if(e.z==13)fmask(e,im)}catch(err){stat.ie++;e.img=1}
 }
 // DEM: מפענח אריח Terrarium לגבהים גולמיים (מטר). ב-AWS יש אריחים "ריקים" (PNG של 1x1, למשל סביב הכנרת ובים) –
 // עבורם מחזירים null ולוקחים את הגובה מאריח-אב תקין (אחרת נוצרים ריבועים שטוחים בגובה 0 ו"חוט" של 32 ק"מ בפינה).
@@ -158,11 +158,13 @@ function visit(z,x,y,set,px,pz){
  const dx=Math.max(x0-px,0,px-(x0+T)),dz=Math.max(z0-pz,0,pz-(z0+T)),d=Math.hypot(dx,dz,Math.max(AGL,0));
  if(d>FAR)return;
  if(z<MAXZ&&d<T*1.25){const cs=[[2*x,2*y],[2*x+1,2*y],[2*x,2*y+1],[2*x+1,2*y+1]],es=cs.map(c=>get(z+1,c[0],c[1]));
-  if(es.every(c=>c.loaded))cs.forEach(c=>visit(z+1,c[0],c[1],set,px,pz));else if(e.loaded)set.add(e);else es.forEach(c=>c.loaded&&set.add(c))}
- else if(e.loaded)set.add(e)}
-function updateTiles(){frame++;const set=new Set(),T4=TS(4),cx=Math.floor((pos.x/K+OX+HW)/T4),cy=Math.floor((HW-(-pos.z/K+OY))/T4);
+  if(es.every(c=>c.loaded))cs.forEach(c=>visit(z+1,c[0],c[1],set,px,pz));else{if(d<10000&&es.some(c=>!c.loaded&&!(c.fail>=3)))vPend++;if(e.loaded)set.add(e);else es.forEach(c=>c.loaded&&set.add(c))}}
+ else if(e.loaded)set.add(e);else if(!(e.fail>=3))vPend++}
+// v010: למסך הטעינה – כמה אריחים עוד חסרים/לא מעודנים ליד המטוס (vPend), וכמה אריחים מוצגים בלי צילום לוויין (vImg)
+let vPend=0,vImg=0,vSet=0;
+function updateTiles(){frame++;vPend=0;const set=new Set(),T4=TS(4),cx=Math.floor((pos.x/K+OX+HW)/T4),cy=Math.floor((HW-(-pos.z/K+OY))/T4);
  for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++)visit(4,cx+a,cy+b,set,pos.x,pos.z);
- tiles.forEach(e=>{if(e.mesh){const v=set.has(e);e.mesh.visible=v;if(v)e.last=frame}});
+ tiles.forEach(e=>{if(e.mesh){const v=set.has(e);e.mesh.visible=v;if(v)e.last=frame}});vSet=set.size;vImg=0;set.forEach(e=>{if(!e.img)vImg++});
  if(frame%90==0&&tiles.size>420)tiles.forEach((e,k)=>{if(e.z>4&&frame-e.last>900){e.dead=true;if(e.mesh){scene.remove(e.mesh);e.mesh.geometry.dispose();if(e.mesh.material.map)e.mesh.material.map.dispose();e.mesh.material.dispose()}tiles.delete(k)}})}
 // flight
 const pos=new THREE.Vector3(),q=new THREE.Quaternion(),camQ=new THREE.Quaternion(),V=new THREE.Vector3(),F=new THREE.Vector3(),Rt=new THREE.Vector3(),Y=new THREE.Vector3(0,1,0),X=new THREE.Vector3(1,0,0),Z=new THREE.Vector3(0,0,1),dq=new THREE.Quaternion(),tilt=new THREE.Quaternion().setFromAxisAngle(X,-.1);
@@ -287,9 +289,10 @@ function addLabels(e){const P=e.L.place,M=e.L.mountain_peak;
    const b0=tf(0,0),b1=tf(T.ext,T.ext);if(best&&(best.x<b0[0]||best.x>=b1[0]||best.z<b0[1]||best.z>=b1[1]))best=null;
    if(best&&bestLen>=25)lab.set(e.k+'r'+layerName+i,{n:n.trim(),k:'road',...best,e:NaN})})})}}
 
+function labLoad(){near(8,1,(x,y)=>vtGet(8,x,y));near(11,1,(x,y)=>vtGet(11,x,y));if(AGL<2200)near(14,3,(x,y)=>vtGet(14,x,y));VT.forEach(e=>{if((e.z==8||e.z==11||e.z==14)&&e.state=='r'&&!e.lab){e.lab=1;addLabels(e)}})}
 function labels(){
  if(!showLb)return;
- if(frame%30==0){near(8,1,(x,y)=>vtGet(8,x,y));near(11,1,(x,y)=>vtGet(11,x,y));if(AGL<2200)near(14,3,(x,y)=>vtGet(14,x,y));VT.forEach(e=>{if((e.z==8||e.z==11||e.z==14)&&e.state=='r'&&!e.lab){e.lab=1;addLabels(e)}});
+ if(frame%30==0){labLoad();
   if(frame%300==0)lab.forEach((l,k)=>{if(Math.hypot(l.x-pos.x,l.z-pos.z)>250000)lab.delete(k)})}
  // v010: רשימת המועמדים (סינון+מיון של כל התוויות, וגובה הקרקע שלהן) מחושבת רק כל 10 פריימים; בכל פריים רק מקרינים את המובילות
  camera.getWorldDirection(fwd);const cp=camera.position,placed=[];
@@ -467,14 +470,18 @@ function frameLoop(now){requestAnimationFrame(frameLoop);const dt=Math.min(.05,(
  else if(mode=='fly'&&!paused){pauseBtn.hidden=false;fly(dt);compass();gauge();if(frame%6==0)audioTick();carsTick(dt);wT.value=now/1000;bU.uNow.value=now/1000;if(frame%15==0){$('spd').textContent=Math.round(speed*3.6);$('alt').textContent=Math.round(AGL);const l=toLL(pos.x,pos.z);$('pos').textContent=l[0].toFixed(3)+', '+l[1].toFixed(3);
   $('stt').textContent=stat.ok+' תמונות'+(stat.ie?' · ⚠'+stat.ie+' נכשלו':'')+(stat.de>2&&!stat.ok?' · ⚠ שגיאת טעינה (הרץ דרך שרת מקומי)':'')+osmTxt()}}
  render(paused?0:dt);if(mode=='fly'&&!paused){labels();osmTick()}}
-// v010: מסך הטעינה מחכה גם לנוף המפורט (z13) ולבניינים הקרובים (עד 1.5 ק"מ מנקודת ההמראה) – עם תקרה של 12 שניות
-let LT0=0;
-function loadTick(){const g=ground(pos.x,pos.z,11);if(g==null){$('st').textContent='טוען נוף… '+tiles.size+' אריחים';return}
- pos.y=g+500;AGL=500;const sec=(performance.now()-LT0)/1000,t13=ground(pos.x,pos.z,13)!=null;if(!t13)g13(pos.x,pos.z,1);let tot=0,done=0;
- if(showOsm){const h2=TS(14)*K/2;near(14,2,(x,y)=>{const e=vtGet(14,x,y);if(Math.max(Math.abs(e.cx-pos.x),Math.abs(e.cz-pos.z))-h2>1500)return;e.use=frame;tot++;if(e.grp||e.skip||e.state=='x')done++;else get(13,x>>1,y>>1,1)});
-  if(done<tot)osmTick(1)}
- $('st').textContent=(t13?'':'טוען נוף מפורט… ')+(tot?'בונה בניינים '+done+'/'+tot+'… ':'')+Math.floor(sec)+' שנ׳';
- if((t13&&done>=tot)||sec>12){mode='fly';$('ov').style.display='none'}}
+// v010: הטיסה מתחילה רק כשהתמונה שלמה: נוף מפורט בלי חורים ליד המטוס, צילום לוויין על כל אריח מוצג, כל הבניינים והכבישים בטווח הבנייה, ואריחי השמות.
+// עצים נטענים אחרי ההמראה. תקרת ביטחון של 60 שנ׳ רק למקרה ששרת לא עונה בכלל (אריח שנכשל 3 פעמים לא נחשב כחסר).
+let LT0=0;const LCAP=60;
+function loadTick(){const g=ground(pos.x,pos.z,11),sec=(performance.now()-LT0)/1000;if(g==null){$('st').textContent='טוען נוף… '+Math.floor(sec)+' שנ׳';return}
+ pos.y=g+500;AGL=500;const t13=ground(pos.x,pos.z,13)!=null;if(!t13)g13(pos.x,pos.z,1);
+ const vd=e=>e.state=='r'||(e.state=='x'&&e.fail>=3);let lt=0,ld=0,bt=0,bd=0;
+ near(8,1,(x,y)=>{lt++;if(vd(vtGet(8,x,y)))ld++});near(11,1,(x,y)=>{lt++;if(vd(vtGet(11,x,y)))ld++});
+ if(showOsm){const R=2000+Math.min(speed*12,2600),h2=TS(14)*K/2;near(14,3,(x,y)=>{const e=vtGet(14,x,y);if(Math.max(Math.abs(e.cx-pos.x),Math.abs(e.cz-pos.z))-h2>=R)return;bt++;if(e.grp||e.skip||(e.state=='x'&&e.fail>=3))bd++;else get(13,x>>1,y>>1,1)});
+  if(bd<bt)osmTick(1)}
+ const terr=t13&&vPend==0,img=vImg==0,ok=terr&&img&&ld>=lt&&bd>=bt;
+ $('st').textContent='מכין את הטיסה… '+(terr?'נוף ✓':'נוף ('+vPend+')')+' · '+(img?'לוויין ✓':'לוויין '+(vSet-vImg)+'/'+vSet)+' · '+(bd>=bt?'בניינים ✓':'בניינים '+bd+'/'+bt)+' · '+(ld>=lt?'שמות ✓':'שמות '+ld+'/'+lt)+' · '+Math.floor(sec)+' שנ׳';
+ if(ok||sec>LCAP){labLoad();LC=null;bU.uNow.value=performance.now()/1000;mode='fly';$('ov').style.display='none'}}
 function resize(){R.setSize(innerWidth,innerHeight,false);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix()}addEventListener('resize',resize);resize();
 function start(la,lo){setPaused(false);altH=null;pauseBtn.hidden=true;setOrigin(la,lo);pos.set(0,1500,0);q.identity();camQ.copy(q);camera.position.copy(pos);mode='loading';LT0=performance.now();$('st').textContent='טוען נוף…';$('q').disabled=true;
  // v010: מבקשים מראש, בעדיפות עליונה, את שרשרת האריחים סביב נקודת ההמראה (במקום לרדת רמה-אחר-רמה)
