@@ -48,4 +48,11 @@ Coordinates: Web-Mercator meters relative to a start origin (`setOrigin`), scale
 - The terrain heights already include the ×1.35 exaggeration; anything comparing to real elevations must account for it (e.g. trees use `g/1.35`; peak `ele` labels do not).
 - Many things are throttled by `frame % N` – behaviour depends on frame rate.
 - Everything lives in global scope in one `<script>`; names are terse and reused (`V`, `F`, `q`, `R`…). Search carefully before renaming.
-- There are no tests. Verify changes by running in a browser (built-in browser pane + local server) and checking the console.
+- Both tile providers have permanent "holes": AWS Terrarium and EOX sometimes return a 1×1 placeholder image. v009 handles this with `demFor()` / `imgFor()` (fall back to an ancestor tile). Any new tile source needs the same guard.
+
+## Verification (required after EVERY fix – user's explicit request)
+After each fix, test it in the browser and show it works (data check + screenshot, ideally before/after vs. the previous version at the same spot) before asking to commit.
+- Local server: `preview_start` with name `static` (`.claude/launch.json`, python http.server on :8765), open `/versions/v0NN.html`.
+- The browser pane is often hidden → `requestAnimationFrame` is throttled and the game doesn't advance. Drive it manually from `javascript_tool` (top-level `const`/`function`s are reachable):
+  `window.sim=async(n,ms=150)=>{for(let i=0;i<n;i++){updateTiles();if(mode=='loading'){const g=ground(pos.x,pos.z,11);if(g!=null){pos.y=g+500;AGL=500;mode='fly';$('ov').style.display='none'}}else{const g=ground(pos.x,pos.z,0);AGL=pos.y-(g??0);compass();gauge();labels();osmTick();carsTick(.016)}render(.016);await new Promise(r=>setTimeout(r,ms))}}`
+  then `start(lat,lon); await sim(60); ...; await sim(250,60)` and take a screenshot. Inspect `tiles`, `VT`, `stat`, `osmTxt()` for data checks; check console errors.

@@ -107,7 +107,7 @@ function pump(){while(active<8&&queue.length){const e=queue.pop();if(e.dead)cont
 async function load(e){
  const f=s=>s.replace('{z}',e.z).replace('{x}',e.x).replace('{y}',e.y);
  try{const d=await demFor(e.z,e.x,e.y);if(!d){stat.de++;return}if(e.dead)return;build(e,d)}catch(err){stat.de++;return}
- try{const im=await loadImg(f(IMG_URL)),t=new THREE.Texture(im);t.anisotropy=4;t.needsUpdate=true;if(e.dead){t.dispose();return}const m=e.mesh.material;m.map=t;m.vertexColors=false;m.needsUpdate=true;stat.ok++;if(e.z==13)fmask(e,im)}catch(err){stat.ie++}
+ try{const im=await imgFor(e.z,e.x,e.y),t=new THREE.Texture(im);t.anisotropy=4;t.needsUpdate=true;if(e.dead){t.dispose();return}const m=e.mesh.material;m.map=t;m.vertexColors=false;m.needsUpdate=true;stat.ok++;if(e.z==13)fmask(e,im)}catch(err){stat.ie++}
 }
 // DEM: מפענח אריח Terrarium לגבהים גולמיים (מטר). ב-AWS יש אריחים "ריקים" (PNG של 1x1, למשל סביב הכנרת ובים) –
 // עבורם מחזירים null ולוקחים את הגובה מאריח-אב תקין (אחרת נוצרים ריבועים שטוחים בגובה 0 ו"חוט" של 32 ק"מ בפינה).
@@ -117,6 +117,10 @@ async function demRaw(z,x,y,cache){const k=z+'/'+x+'/'+y;if(demCache.has(k))retu
  if(im.naturalWidth==256&&im.naturalHeight==256){const c=document.createElement('canvas');c.width=c.height=256;const cx=c.getContext('2d',{willReadFrequently:true});cx.drawImage(im,0,0);const d=cx.getImageData(0,0,256,256).data;
   H=new Float32Array(65536);for(let i=0;i<65536;i++){const r=d[i*4]*256+d[i*4+1]+d[i*4+2]/256-32768;H[i]=r>9000?9000:r}}
  if(cache){demCache.set(k,H);if(demCache.size>24)demCache.delete(demCache.keys().next().value)}return H}
+// גם ל-EOX יש "חורים": במקום צילום מוחזר JPEG לבן של 1x1 (למשל 12/2451/1651 – טבריה). במקרה כזה חותכים את החלק המתאים מאריח-אב.
+async function imgFor(z,x,y){for(let k=0;k<=z;k++){const ax=x>>k,ay=y>>k;let im;try{im=await loadImg(IMG_URL.replace('{z}',z-k).replace('{x}',ax).replace('{y}',ay))}catch(err){if(k==0)throw err;continue}
+ if(im.naturalWidth<256)continue;if(!k)return im;const c=document.createElement('canvas');c.width=c.height=256;const s=256/2**k;
+ c.getContext('2d').drawImage(im,(x-(ax<<k))*s,(y-(ay<<k))*s,s,s,0,0,256,256);return c}throw 'no imagery'}
 async function demFor(z,x,y){for(let k=0;k<=z;k++){const H=await demRaw(z-k,x>>k,y>>k,k>0);if(H)return{H,k,ox:x-((x>>k)<<k),oy:y-((y>>k)<<k)}}return null}
 function build(e,dem){
  const N=e.z>=12?128:64,n=N+1,T=TS(e.z),x0=(-HW+e.x*T-OX)*K,z0=-((HW-e.y*T)-OY)*K,s=T*K/N,hg=new Float32Array(n*n);
