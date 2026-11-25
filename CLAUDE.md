@@ -29,7 +29,18 @@ E.g. `npx serve .` or `python -m http.server` from the repo root, then open `/ve
 | Geocoding | `nominatim.openstreetmap.org/search` | search box |
 Attribution text lives in `#att` – keep it when adding sources.
 
-## Code map (v008; code is minified-style, one-letter names)
+## Current status & roadmap (updated 2026-11-25)
+- **Active (main URL): v009.** **In development: v010** (Stage A performance, committed, not yet activated – user is testing it at `/versions/v010.html`).
+- User feedback on v010: Manhattan starts in seconds ✔; buildings appear gradually ✔ but a visible "end of buildings" line when climbing ~1 km; Jungfrau sharpens within seconds ✔ but steep slopes look smeared; street names float too high above the road.
+- **Next, agreed (do in v010, then ask to activate):**
+  1. **Street labels sit on the road**: road label anchor is `g+30` in `labels()` (`l.k=='road'?30`) → lower to ~2–3 m; hide labels whose anchor is occluded by terrain (cheap ray-march with `ground()` between camera and anchor); optional small dot at the anchor.
+  2. **Wait for nearby buildings before takeoff**: keep the loading overlay (mode `loading`) until z13 terrain + building tiles within ~1.5 km of the start are built (`osmTick` must run during loading), with a hard cap of ~12 s; show progress text.
+- **Then v011 – steep-slope texture**: satellite imagery is top-down Sentinel-2 (~10 m; EOX z14 is missing/1×1 in places, z15–16 are just upsampled), so cliffs are smeared. Plan: in the terrain shader blend a procedural world-space (triplanar) rock/snow detail by slope (normal.y) and brightness; tone down the saturation boost that turns snow cyan. Alternative: sharper imagery source (Esri/MapTiler – needs key/terms check).
+- **Stage B (structural, discuss first)**: split into modules + Web Worker for MVT decode / bldTile / trees (removes 50–130 ms stutters); far-building LOD ring (simple boxes of tall buildings to 8–10 km, also above 3000 m AGL) to remove the "buildings end" line; consider dropping `logarithmicDepthBuffer` (disables early-Z).
+
+## Code map (v008, plus v009/v010 changes noted; code is minified-style, one-letter names)
+- v009 added: `demRaw/demFor` (DEM with ancestor fallback), `imgFor` (imagery with ancestor fallback), button blur on click.
+- v010 added: `get(z,x,y,pri)` + `tprio()` priority queue (12 concurrent, DEM+imagery in parallel); `bU` uniforms + `aT` attribute → building dissolve-in (time) and distance fade (`uR`) in `oMat.onBeforeCompile`; `osmTick` every 8 frames, nearest/ahead tile first, R=2000+min(speed*12,2600); trees get a per-tile bounding sphere (frustum culling); `labels()` candidate list `LC` rebuilt every 10 frames; `inT()` drops vector-tile buffer duplicates in `addLabels`.
 Coordinates: Web-Mercator meters relative to a start origin (`setOrigin`), scaled by `K=cos(lat)`; world X=east, Z=south, Y=up (meters). `toLL(x,z)` → lat/lon. `TS(z)` = tile size in mercator meters.
 - **Scene setup**: renderer (logarithmic depth), fog, sky sphere, sun + hemisphere light, procedural `plane` group, plane shadow `shG`.
 - **Terrain tiles** (`tiles` Map, `get/pump/load/build/visit/updateTiles`): quadtree LOD from z4 to `MAXZ=13`, max 8 concurrent loads, DEM → 64/128-grid mesh with skirts, imagery as texture, `detail()` shader patch adds sharpening + near-field noise. Height × `verticalExaggeration=1.35` inside `build()`. Eviction when >420 tiles.
@@ -58,3 +69,7 @@ After each fix, test it in the browser and show it works (data check + screensho
 - The browser pane is often hidden → `requestAnimationFrame` is throttled and the game doesn't advance. Drive it manually from `javascript_tool` (top-level `const`/`function`s are reachable):
   `window.sim=async(n,ms=150)=>{for(let i=0;i<n;i++){updateTiles();if(mode=='loading'){const g=ground(pos.x,pos.z,11);if(g!=null){pos.y=g+500;AGL=500;mode='fly';$('ov').style.display='none'}}else{const g=ground(pos.x,pos.z,0);AGL=pos.y-(g??0);compass();gauge();labels();osmTick();carsTick(.016)}render(.016);await new Promise(r=>setTimeout(r,ms))}}`
   then `start(lat,lon); await sim(60); ...; await sim(250,60)` and take a screenshot. Inspect `tiles`, `VT`, `stat`, `osmTxt()` for data checks; check console errors.
+- When the pane is displayed the game runs by itself – just `start(...)` and wait (javascript_tool calls time out at 45 s; split long waits).
+- Cold-load test (no browser cache): before `start()`, patch `HTMLImageElement.prototype.src` and `fetch` to append a unique `?cb=<token>` to tile URLs. Reference: Manhattan (40.75,-73.985) v009 = 80 s to takeoff, v010 < 5 s.
+- GPU cost per layer: pause (`setPaused(true)`), wrap `R.render` with `EXT_disjoint_timer_query_webgl2`, toggle `osmGrp`/`carM`/tree groups (`e.trg`)/building meshes (`material===oMat`) and compare medians.
+- Don't hammer the tile servers: many cache-busted runs made them slow (2–14 s per request) for a while.
