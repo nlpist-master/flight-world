@@ -6,7 +6,7 @@ Deployed on Vercel at https://flight-world.vercel.app. The user writes in Hebrew
 ## Repo layout
 - `versions/v0NN.html` – each version is ONE self-contained HTML file (CSS + JS inline, Three.js r128 from cdnjs). No build step, no package.json.
 - `vercel.json` – rewrites `/` to the active version. Edited by hand to switch versions.
-- `VERSIONS.md` – version table (what each version added). **Update it whenever a version is created or activated.**
+- `VERSIONS.md` – version table (what each version added). **Update it whenever a version is created or activated.** `README.md` (Hebrew, public) has a short version table + "active version" line – keep it in sync too.
 - `og-image.png` – link-preview image (referenced by absolute URL from the HTML meta tags).
 
 ## Versioning rules
