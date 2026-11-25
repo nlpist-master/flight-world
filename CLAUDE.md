@@ -29,13 +29,10 @@ E.g. `npx serve .` or `python -m http.server` from the repo root, then open `/ve
 | Geocoding | `nominatim.openstreetmap.org/search` | search box |
 Attribution text lives in `#att` – keep it when adding sources.
 
-## Current status & roadmap (updated 2026-11-25)
-- **Active (main URL): v009.** **In development: v010** (Stage A performance, committed, not yet activated – user is testing it at `/versions/v010.html`).
-- User feedback on v010: Manhattan starts in seconds ✔; buildings appear gradually ✔ but a visible "end of buildings" line when climbing ~1 km; Jungfrau sharpens within seconds ✔ but steep slopes look smeared; street names float too high above the road.
-- **Next, agreed (do in v010, then ask to activate):**
-  1. **Street labels sit on the road**: road label anchor is `g+30` in `labels()` (`l.k=='road'?30`) → lower to ~2–3 m; hide labels whose anchor is occluded by terrain (cheap ray-march with `ground()` between camera and anchor); optional small dot at the anchor.
-  2. **Wait for nearby buildings before takeoff**: keep the loading overlay (mode `loading`) until z13 terrain + building tiles within ~1.5 km of the start are built (`osmTick` must run during loading), with a hard cap of ~12 s; show progress text.
-- **Then v011 – steep-slope texture**: satellite imagery is top-down Sentinel-2 (~10 m; EOX z14 is missing/1×1 in places, z15–16 are just upsampled), so cliffs are smeared. Plan: in the terrain shader blend a procedural world-space (triplanar) rock/snow detail by slope (normal.y) and brightness; tone down the saturation boost that turns snow cyan. Alternative: sharper imagery source (Esri/MapTiler – needs key/terms check).
+## Current status & roadmap (updated 2026-11-25, v010 active)
+- **Active (main URL): v010** (activated 2026-11-25). v010 also has: road labels at `g+RDH` (2.5 m) + terrain occlusion `occ()`; `loadTick()` keeps the loading overlay until z13 under the plane, no terrain holes/pending refinement within 10 km (`vPend`), imagery on every shown tile (`vImg`, `e.img`), all z14 building tiles within osmTick's R (~3 km) built, and z8/z11 label tiles – 60 s safety cap (user: "flight must always start complete and impressive"); DEM load failures are retried with backoff (`e.fail`).
+- **Next: v011 – make mountains look like the real thing** (user example: Matterhorn looks like a smeared blob with cyan snow).
+- **v011 – steep-slope texture**: satellite imagery is top-down Sentinel-2 (~10 m; EOX z14 is missing/1×1 in places, z15–16 are just upsampled), so cliffs are smeared. Plan: in the terrain shader blend a procedural world-space (triplanar) rock/snow detail by slope (normal.y) and brightness; tone down the saturation boost that turns snow cyan. Alternative: sharper imagery source (Esri/MapTiler – needs key/terms check).
 - **Stage B (structural, discuss first)**: split into modules + Web Worker for MVT decode / bldTile / trees (removes 50–130 ms stutters); far-building LOD ring (simple boxes of tall buildings to 8–10 km, also above 3000 m AGL) to remove the "buildings end" line; consider dropping `logarithmicDepthBuffer` (disables early-Z).
 
 ## Code map (v008, plus v009/v010 changes noted; code is minified-style, one-letter names)
