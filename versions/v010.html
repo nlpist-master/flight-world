@@ -325,7 +325,7 @@ oMat.onBeforeCompile=sh=>{sh.uniforms.uNow=bU.uNow;sh.uniforms.uR=bU.uR;
 const rMat=new THREE.MeshPhongMaterial({color:0xaaaaaa,vertexColors:true,specular:0x111111,shininess:5,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4});
 const RW={motorway:14,trunk:12,primary:10,secondary:8,tertiary:7,minor:5.5,service:3.5,track:3};
 const oH=i=>{const n=Math.sin(i*12.9898)*43758.5453;return n-Math.floor(n)},ar=r=>{let s=0;for(let i=0,n=r.length;i<n;i++){const a=r[i],b=r[(i+1)%n];s+=a[0]*b[1]-b[0]*a[1]}return s};
-function g13(x,z){const v=ground(x,z,13);if(v==null){const T=TS(13);get(13,Math.floor((x/K+OX+HW)/T),Math.floor((HW-(-z/K+OY))/T))}return v}
+function g13(x,z,pri){const v=ground(x,z,13);if(v==null){const T=TS(13);get(13,Math.floor((x/K+OX+HW)/T),Math.floor((HW-(-z/K+OY))/T),pri)}return v}
 function bldTile(e){
  const bp=[],bc=[],rp=[],rc=[],wp=[],wc=[],rd=[],st={b:0,bh:0,r:0,w:0},B=e.L.building,Tr=e.L.transportation,Wt=e.L.water;
  if(B){const tf=tw(e,B.ext);let id=0;
@@ -434,13 +434,13 @@ function addTrees(e,LV){const W=e.L&&e.L.landcover,fs=W?W.feats.filter(f=>f.t==3
  e.grp.add(grp);e.trg=grp;e.tl=LV;e.trN=(con.length+bro.length)/5;return true}
 function treeFree(e){if(e.trg){e.trg.traverse(o=>o.isInstancedMesh&&o.dispose());e.grp.remove(e.trg);e.trg=null}e.tl=0;e.trN=0;e.trT=0}
 // STAGE-B-END
-function osmTick(){
+function osmTick(force){
  // v010: כל 8 פריימים (היה 20), טווח גדול יותר, הורדה מוקדמת של אריחים, ובנייה של האריח הקרוב ביותר (עם הטיה לכיוון הטיסה) קודם
- const needRoadLabels=showLb&&AGL<2200;if((!showOsm&&!needRoadLabels)||frame%8)return;
+ const needRoadLabels=showLb&&AGL<2200;if((!showOsm&&!needRoadLabels)||(!force&&frame%8))return;
  const R=2000+Math.min(speed*12,2600),h2=TS(14)*K/2;bU.uR.value=R+h2*2;
  if(AGL<3000&&(showOsm||needRoadLabels))near(14,3,(x,y)=>{const T=TS(14),cx=(-HW+(x+.5)*T-OX)*K,cz=-((HW-(y+.5)*T)-OY)*K;if(Math.max(Math.abs(cx-pos.x),Math.abs(cz-pos.z))-h2<R+1500)vtGet(14,x,y)});
  let built=0,best=null,bd=1e9;const ax=pos.x+F.x*speed*3,az=pos.z+F.z*speed*3;
- if(showOsm&&AGL<3000)VT.forEach(e=>{if(e.z!=14||e.skip||e.state!='r'||e.grp)return;const d=Math.max(Math.abs(e.cx-pos.x),Math.abs(e.cz-pos.z))-h2;if(d>=R)return;const s=Math.hypot(e.cx-ax,e.cz-az);if(s<bd){bd=s;best=e}});
+ if(showOsm&&AGL<3000)VT.forEach(e=>{if(e.z!=14||e.skip||e.state!='r'||e.grp)return;const p13=tiles.get('13/'+(e.x>>1)+'/'+(e.y>>1));if(!p13||!p13.loaded){get(13,e.x>>1,e.y>>1);return}const d=Math.max(Math.abs(e.cx-pos.x),Math.abs(e.cz-pos.z))-h2;if(d>=R)return;const s=Math.hypot(e.cx-ax,e.cz-az);if(s<bd){bd=s;best=e}});
  if(best)try{const r=bldTile(best);if(r){best.grp=r.grp;best.st=r.st;best.cars=spawn(r.rd);osmGrp.add(r.grp);built=1}}catch(err){osmS.err++;osmS.last='bld '+String(err&&err.message||err);best.skip=1}
  VT.forEach((e,k)=>{if(e.z!=14)return;const d=Math.max(Math.abs(e.cx-pos.x),Math.abs(e.cz-pos.z))-h2;
   try{if(!e.skip&&e.grp&&(!showOsm||d>R+2500))osmFree(e)}catch(err){osmS.err++;osmS.last='bld '+String(err&&err.message||err);e.skip=1}
@@ -463,12 +463,20 @@ function render(dt){
  sky.position.copy(camera.position);R.render(scene,camera)}
 function frameLoop(now){requestAnimationFrame(frameLoop);const dt=Math.min(.05,(now-last)/1000);last=now;
  if(!paused&&mode!='menu')updateTiles();
- if(mode=='loading'){const g=ground(pos.x,pos.z,11);$('st').textContent='טוען נוף… '+tiles.size+' אריחים';if(g!=null){pos.y=g+500;AGL=500;mode='fly';$('ov').style.display='none'}}
+ if(mode=='loading')loadTick();
  else if(mode=='fly'&&!paused){pauseBtn.hidden=false;fly(dt);compass();gauge();if(frame%6==0)audioTick();carsTick(dt);wT.value=now/1000;bU.uNow.value=now/1000;if(frame%15==0){$('spd').textContent=Math.round(speed*3.6);$('alt').textContent=Math.round(AGL);const l=toLL(pos.x,pos.z);$('pos').textContent=l[0].toFixed(3)+', '+l[1].toFixed(3);
   $('stt').textContent=stat.ok+' תמונות'+(stat.ie?' · ⚠'+stat.ie+' נכשלו':'')+(stat.de>2&&!stat.ok?' · ⚠ שגיאת טעינה (הרץ דרך שרת מקומי)':'')+osmTxt()}}
  render(paused?0:dt);if(mode=='fly'&&!paused){labels();osmTick()}}
+// v010: מסך הטעינה מחכה גם לנוף המפורט (z13) ולבניינים הקרובים (עד 1.5 ק"מ מנקודת ההמראה) – עם תקרה של 12 שניות
+let LT0=0;
+function loadTick(){const g=ground(pos.x,pos.z,11);if(g==null){$('st').textContent='טוען נוף… '+tiles.size+' אריחים';return}
+ pos.y=g+500;AGL=500;const sec=(performance.now()-LT0)/1000,t13=ground(pos.x,pos.z,13)!=null;if(!t13)g13(pos.x,pos.z,1);let tot=0,done=0;
+ if(showOsm){const h2=TS(14)*K/2;near(14,2,(x,y)=>{const e=vtGet(14,x,y);if(Math.max(Math.abs(e.cx-pos.x),Math.abs(e.cz-pos.z))-h2>1500)return;e.use=frame;tot++;if(e.grp||e.skip||e.state=='x')done++;else get(13,x>>1,y>>1,1)});
+  if(done<tot)osmTick(1)}
+ $('st').textContent=(t13?'':'טוען נוף מפורט… ')+(tot?'בונה בניינים '+done+'/'+tot+'… ':'')+Math.floor(sec)+' שנ׳';
+ if((t13&&done>=tot)||sec>12){mode='fly';$('ov').style.display='none'}}
 function resize(){R.setSize(innerWidth,innerHeight,false);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix()}addEventListener('resize',resize);resize();
-function start(la,lo){setPaused(false);altH=null;pauseBtn.hidden=true;setOrigin(la,lo);pos.set(0,1500,0);q.identity();camQ.copy(q);camera.position.copy(pos);mode='loading';$('st').textContent='טוען נוף…';$('q').disabled=true;
+function start(la,lo){setPaused(false);altH=null;pauseBtn.hidden=true;setOrigin(la,lo);pos.set(0,1500,0);q.identity();camQ.copy(q);camera.position.copy(pos);mode='loading';LT0=performance.now();$('st').textContent='טוען נוף…';$('q').disabled=true;
  // v010: מבקשים מראש, בעדיפות עליונה, את שרשרת האריחים סביב נקודת ההמראה (במקום לרדת רמה-אחר-רמה)
  // רק האריח שמתחת למטוס בכל רמה (8 אריחים) – כל בקשה לשרת הגבהים לוקחת 1.5–4 שניות בביקור ראשון, אז כל בקשה מיותרת לפני ההמראה עולה ביוקר
  F.set(0,0,-1);for(let z=5;z<=12;z++){const T=TS(z);get(z,Math.floor((OX+HW)/T),Math.floor((HW-OY)/T),1)}}
